@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-
-	"github.com/joho/godotenv"
 )
 
 // Structs for decoding the JSON response
@@ -40,13 +38,6 @@ type IPAddress struct {
 }
 
 func main() {
-	// Load environment variables from .env file
-	err := godotenv.Load()
-	if err != nil {
-		fmt.Println("Error loading .env file:", err)
-		return
-	}
-
 	// Get the Nautobot API token
 	token := os.Getenv("NAUTOBOT_API_TOKEN")
 	if token == "" {

@@ -17,7 +17,7 @@ COPY . .
 RUN go build -o nautobot_http_sd
 
 # Document the port that may need to be published
-EXPOSE 8000
+EXPOSE 6645
 
 # Start the application
 CMD ["/build/nautobot_http_sd"]

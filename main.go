@@ -49,7 +49,7 @@ func main() {
 	}
 
 	// Read all GraphQL query files from the directory
-	queryDir := "graphql_queries/job_*"
+	queryDir := "graphql_queries/job_*.gql"
 	entries, err := filepath.Glob(queryDir)
 	if err != nil {
 		log.Fatalf("Error reading directory %s: %v", queryDir, err)

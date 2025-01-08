@@ -174,7 +174,7 @@ func main() {
 	})
 
 	// Serve the JSON data on port 6645
-	fmt.Println("Serving on http://localhost:6645")
+	fmt.Println("Serving on :6645")
 	err = http.ListenAndServe(":6645", nil)
 	if err != nil {
 		fmt.Println("Error starting server:", err)

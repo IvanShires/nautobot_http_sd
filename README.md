@@ -24,9 +24,6 @@ Clone the repository:
 git clone https://github.com/IvanShires/nautobot_http_sd.git
 cd nautobot_http_sd
 docker build -t nautobot_http_sd .
-touch .env
-echo "NAUTOBOT_API_TOKEN=your_token_here" >> .env
-echo "NAUTOBOT_URL=http://nautobot.domain.tld" >> .env
 docker run -d \
 --name=nautobot_http_sd \
 -e NAUTOBOT_API_TOKEN=your_token_here \

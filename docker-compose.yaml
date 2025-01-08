@@ -1,0 +1,26 @@
+services:
+  nautobot_http_sd:
+    container_name: nautobot_http_sd
+    build:
+      context: nautobot_http_sd # Directory containing the Dockerfile
+      dockerfile: Dockerfile
+    container_name: nautobot_http_sd
+    ports:
+      - "8080:8080" # Expose port 8080
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:6.2
+    container_name: redis
+    ports:
+      - "6379:6379" # Expose Redis default port
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:

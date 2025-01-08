@@ -1,0 +1,6 @@
+github.com/joho/godotenv v1.5.1 h1:7eLL/+HRGLY0ldzfGMeQkb7vMd0as4CfYvUVzLqw0N0=
+github.com/joho/godotenv v1.5.1/go.mod h1:f4LDr5Voq0i2e/R5DDNOoa2zzDfwtkZa6DnEwAbqwq4=
+github.com/nautobot/go-nautobot/v2 v2.3.2-beta h1:w3sDcyt5CDSSWkKWUow08loxo6o72WjoDyclwkllotQ=
+github.com/nautobot/go-nautobot/v2 v2.3.2-beta/go.mod h1:T0emSo3w4TabGb4Wwb1o3NOEgbaVL1MLMDI9rFWaxtg=
+gopkg.in/validator.v2 v2.0.1 h1:xF0KWyGWXm/LM2G1TrEjqOu4pa6coO9AlWSf3msVfDY=
+gopkg.in/validator.v2 v2.0.1/go.mod h1:lIUZBlB3Im4s/eYp39Ry/wkR02yOPhZ9IwIRBjuPuG8=

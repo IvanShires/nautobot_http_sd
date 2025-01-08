@@ -8,45 +8,46 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 
 	"github.com/joho/godotenv"
 )
 
-// Structs for JSON response
+// Structs for decoding the JSON response
 type Response struct {
 	Data struct {
-		Devices []Device `json:"devices"`
+		Devices []Device `json:"devices"` // List of devices in the response
 	} `json:"data"`
 }
 
 type Device struct {
-	Name      string     `json:"name"`
-	Role      *Role      `json:"role"`
-	Location  Location   `json:"location"`
-	PrimaryIP *IPAddress `json:"primary_ip4"`
+	Name      string     `json:"name"`        // Device name
+	Role      *Role      `json:"role"`        // Device role
+	Location  Location   `json:"location"`    // Device location
+	PrimaryIP *IPAddress `json:"primary_ip4"` // Primary IP address of the device
 }
 
 type Role struct {
-	Name string `json:"name"`
+	Name string `json:"name"` // Role name
 }
 
 type Location struct {
-	Name string `json:"name"`
+	Name string `json:"name"` // Location name
 }
 
 type IPAddress struct {
-	Address string `json:"address"`
+	Address string `json:"address"` // IP address with CIDR
 }
 
 func main() {
-	// Load the .env file
+	// Load environment variables from .env file
 	err := godotenv.Load()
 	if err != nil {
 		fmt.Println("Error loading .env file:", err)
 		return
 	}
 
-	// Get the token
+	// Get the Nautobot API token
 	token := os.Getenv("NAUTOBOT_API_TOKEN")
 	if token == "" {
 		fmt.Println("Error: NAUTOBOT_API_TOKEN environment variable is not set")
@@ -68,9 +69,9 @@ func main() {
 		return
 	}
 
-	// Create the payload
+	// Create the payload for the GraphQL query
 	payload := map[string]string{
-		"query": string(query),
+		"query": string(query), // The GraphQL query as a string
 	}
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -78,18 +79,18 @@ func main() {
 		return
 	}
 
-	// Create the HTTP request
+	// Create the HTTP POST request
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		fmt.Println("Error creating request:", err)
 		return
 	}
 
-	// Set headers
+	// Set the necessary headers for the API request
 	req.Header.Set("Authorization", "Token "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	// Send the request
+	// Send the request and get the response
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -98,7 +99,7 @@ func main() {
 	}
 	defer resp.Body.Close()
 
-	// Check for HTTP response errors
+	// Check the HTTP response status
 	if resp.StatusCode != http.StatusOK {
 		body, _ := ioutil.ReadAll(resp.Body)
 		fmt.Printf("HTTP Response Status: %s\n", resp.Status)
@@ -120,7 +121,7 @@ func main() {
 		return
 	}
 
-	// Decode the JSON response into the struct
+	// Decode the JSON response into the Response struct
 	var response Response
 	err = json.Unmarshal(body, &response)
 	if err != nil {
@@ -128,21 +129,28 @@ func main() {
 		return
 	}
 
-	// Validate that the required fields exist
+	// Ensure that devices exist in the response
 	if response.Data.Devices == nil || len(response.Data.Devices) == 0 {
-		log.Println("No devices found in response. Double check your GraphQL and/or Nautobot instance")
+		log.Println("No devices found in response. Check your GraphQL query or Nautobot instance.")
 		return
 	}
 
-	// Output JSON structure
+	// Prepare the output JSON structure
 	var output []map[string]interface{}
 
-	// Print the decoded response
+	// Regular expression to remove CIDR from IP addresses
+	re := regexp.MustCompile(`/[0-9]+.*`)
+
+	// Iterate through devices and build the output structure
 	for _, device := range response.Data.Devices {
-		// Ensure PrimaryIP and Role are not nil
+		// Skip devices without a valid primary IP or role
 		if device.PrimaryIP != nil && device.Role != nil && device.Role.Name != "" {
+			// Remove CIDR notation from the IP address
+			deviceIP := re.ReplaceAllString(device.PrimaryIP.Address, "")
+
+			// Construct the Prometheus scrape target structure
 			entry := map[string]interface{}{
-				"targets": []string{device.PrimaryIP.Address},
+				"targets": []string{deviceIP},
 				"labels": map[string]string{
 					"__meta_prometheus_job": device.Role.Name,
 					"__meta_datacenter":     device.Location.Name,
@@ -152,24 +160,23 @@ func main() {
 		}
 	}
 
-	// Convert to JSON
+	// Convert the output structure to JSON
 	jsonData, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
 		fmt.Println("Error marshalling JSON:", err)
 		return
 	}
 
-	// Print the JSON
-	// Start HTTP server
+	// Start the HTTP server to serve the JSON data
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(jsonData)
 	})
 
+	// Serve the JSON data on port 6645
 	fmt.Println("Serving on http://localhost:6645")
 	err = http.ListenAndServe(":6645", nil)
 	if err != nil {
 		fmt.Println("Error starting server:", err)
 	}
-
 }

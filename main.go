@@ -38,136 +38,124 @@ type IPAddress struct {
 }
 
 func main() {
-	// Get the Nautobot API token
+	// Load environment variables for API token and URL
 	token := os.Getenv("NAUTOBOT_API_TOKEN")
-	if token == "" {
-		fmt.Println("Error: NAUTOBOT_API_TOKEN environment variable is not set")
-		return
-	}
-
-	// Get the Nautobot URL
 	url := os.Getenv("NAUTOBOT_URL")
-	if url == "" {
-		fmt.Println("Error: NAUTOBOT_URL environment variable is not set")
-		return
+
+	if token == "" || url == "" {
+		log.Fatal("Error: Ensure NAUTOBOT_API_TOKEN and NAUTOBOT_URL are set in the environment")
 	}
 
-	// Read GraphQL query from file
-	queryFile := "graphql_queries/query.gql"
-	query, err := os.ReadFile(queryFile)
+	// Read all GraphQL query files from the directory
+	queryDir := "graphql_queries/"
+	entries, err := os.ReadDir(queryDir)
 	if err != nil {
-		fmt.Println("Error reading query file:", err)
-		return
+		log.Fatalf("Error reading directory %s: %v", queryDir, err)
 	}
 
-	// Create the payload for the GraphQL query
-	payload := map[string]string{
-		"query": string(query), // The GraphQL query as a string
+	// Prepare output for Prometheus scrape targets
+	var output []map[string]interface{}
+	cidrRegex := regexp.MustCompile(`/[0-9]+.*`) // Regex to remove CIDR notation
+	gqlFileRegex := regexp.MustCompile(`\.gql$`) // Regex to strip ".gql" extension
+
+	for _, entry := range entries {
+		queryFile := queryDir + entry.Name()
+
+		// Skip non-regular files
+		if entry.IsDir() || !gqlFileRegex.MatchString(entry.Name()) {
+			continue
+		}
+
+		// Read the GraphQL query from the file
+		query, err := os.ReadFile(queryFile)
+		if err != nil {
+			log.Printf("Error reading file %s: %v", queryFile, err)
+			continue
+		}
+
+		// Send GraphQL query and process the response
+		if err := processQuery(url, token, string(query), gqlFileRegex.ReplaceAllString(entry.Name(), ""), &output, cidrRegex); err != nil {
+			log.Printf("Error processing query from file %s: %v", queryFile, err)
+		}
 	}
-	payloadBytes, err := json.Marshal(payload)
+
+	// Serve the output as JSON on a local HTTP server
+	startServer(output)
+}
+
+// processQuery sends a GraphQL query and processes the response
+func processQuery(url, token, query, jobName string, output *[]map[string]interface{}, cidrRegex *regexp.Regexp) error {
+	// Prepare GraphQL payload
+	payloadBytes, err := json.Marshal(map[string]string{"query": query})
 	if err != nil {
-		fmt.Println("Error marshalling payload:", err)
-		return
+		return fmt.Errorf("error marshalling payload: %v", err)
 	}
 
-	// Create the HTTP POST request
+	// Create and send the HTTP POST request
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
 	if err != nil {
-		fmt.Println("Error creating request:", err)
-		return
+		return fmt.Errorf("error creating request: %v", err)
 	}
-
-	// Set the necessary headers for the API request
 	req.Header.Set("Authorization", "Token "+token)
 	req.Header.Set("Content-Type", "application/json")
 
-	// Send the request and get the response
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Println("Error making request:", err)
-		return
+		return fmt.Errorf("error sending request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	// Check the HTTP response status
+	// Handle non-OK response status
 	if resp.StatusCode != http.StatusOK {
 		body, _ := ioutil.ReadAll(resp.Body)
-		fmt.Printf("HTTP Response Status: %s\n", resp.Status)
-		fmt.Printf("Error Response: %s\n", string(body))
-
-		// Handle specific error cases
-		if resp.StatusCode == http.StatusUnauthorized {
-			fmt.Println("Error: Invalid token provided.")
-		} else {
-			fmt.Println("Error: An unexpected error occurred.")
-		}
-		return
+		return fmt.Errorf("unexpected HTTP response: %s, body: %s", resp.Status, string(body))
 	}
 
-	// Read the response body
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Println("Error reading response body:", err)
-		return
-	}
-
-	// Decode the JSON response into the Response struct
+	// Parse the JSON response
 	var response Response
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		fmt.Println("Error decoding JSON:", err)
-		return
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return fmt.Errorf("error decoding response JSON: %v", err)
 	}
 
-	// Ensure that devices exist in the response
-	if response.Data.Devices == nil || len(response.Data.Devices) == 0 {
-		log.Println("No devices found in response. Check your GraphQL query or Nautobot instance.")
-		return
+	// Ensure the response contains devices
+	if len(response.Data.Devices) == 0 {
+		log.Println("No devices found in response")
+		return nil
 	}
 
-	// Prepare the output JSON structure
-	var output []map[string]interface{}
-
-	// Regular expression to remove CIDR from IP addresses
-	re := regexp.MustCompile(`/[0-9]+.*`)
-
-	// Iterate through devices and build the output structure
+	// Process each device in the response
 	for _, device := range response.Data.Devices {
-		// Skip devices without a valid primary IP or role
 		if device.PrimaryIP != nil && device.Role != nil && device.Role.Name != "" {
-			// Remove CIDR notation from the IP address
-			deviceIP := re.ReplaceAllString(device.PrimaryIP.Address, "")
-
-			// Construct the Prometheus scrape target structure
+			deviceIP := cidrRegex.ReplaceAllString(device.PrimaryIP.Address, "") // Strip CIDR
 			entry := map[string]interface{}{
 				"targets": []string{deviceIP},
 				"labels": map[string]string{
-					"__meta_prometheus_job": device.Role.Name,
+					"__meta_prometheus_job": jobName,
 					"__meta_datacenter":     device.Location.Name,
 				},
 			}
-			output = append(output, entry)
+			*output = append(*output, entry)
 		}
 	}
+	return nil
+}
 
-	// Convert the output structure to JSON
+// startServer serves the JSON output on a local HTTP server
+func startServer(output []map[string]interface{}) {
 	jsonData, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
-		fmt.Println("Error marshalling JSON:", err)
-		return
+		log.Fatalf("Error marshalling JSON: %v", err)
 	}
 
-	// Start the HTTP server to serve the JSON data
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(jsonData)
 	})
 
-	// Serve the JSON data on port 6645
-	fmt.Println("Serving on :6645")
-	err = http.ListenAndServe(":6645", nil)
-	if err != nil {
-		fmt.Println("Error starting server:", err)
+	port := ":6645"
+	log.Printf("Serving on %s", port)
+	if err := http.ListenAndServe(port, nil); err != nil {
+		log.Fatalf("Error starting server: %v", err)
 	}
 }

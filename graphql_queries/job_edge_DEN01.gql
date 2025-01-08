@@ -1,5 +1,5 @@
 {
-  devices(has_primary_ip: true) {
+  devices(has_primary_ip: true, role: "edge",location: "DEN01") {
     name
     role {
       name

@@ -27,7 +27,6 @@ docker build -t nautobot_http_sd .
 docker run -d \
 --name=nautobot_http_sd \
 -e NAUTOBOT_API_TOKEN=your_token_here \
--e NAUTOBOT_API_TOKEN=your_token_here \
 -e NAUTOBOT_URL=https://nautobot.domain.tld/api/graphql/ \
 -p 6645:6645 \
 nautobot_http_sd

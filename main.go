@@ -134,16 +134,42 @@ func main() {
 		return
 	}
 
+	// Output JSON structure
+	var output []map[string]interface{}
+
 	// Print the decoded response
 	for _, device := range response.Data.Devices {
-		fmt.Printf("Device Name: %s\n", device.Name)
-		fmt.Printf("Location: %s\n", device.Location.Name)
-		if device.Role != nil && device.Role.Name != "" {
-			fmt.Printf("Role: %s\n", device.Role.Name)
+		// Ensure PrimaryIP and Role are not nil
+		if device.PrimaryIP != nil && device.Role != nil && device.Role.Name != "" {
+			entry := map[string]interface{}{
+				"targets": []string{device.PrimaryIP.Address},
+				"labels": map[string]string{
+					"__meta_prometheus_job": device.Role.Name,
+					"__meta_datacenter":     device.Location.Name,
+				},
+			}
+			output = append(output, entry)
 		}
-		if device.PrimaryIP != nil {
-			fmt.Printf("Primary IP: %s\n", device.PrimaryIP.Address)
-		}
-		fmt.Println()
 	}
+
+	// Convert to JSON
+	jsonData, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		fmt.Println("Error marshalling JSON:", err)
+		return
+	}
+
+	// Print the JSON
+	// Start HTTP server
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(jsonData)
+	})
+
+	fmt.Println("Serving on http://localhost:6645")
+	err = http.ListenAndServe(":6645", nil)
+	if err != nil {
+		fmt.Println("Error starting server:", err)
+	}
+
 }

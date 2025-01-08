@@ -2,6 +2,10 @@
 
 This project is a Go-based HTTP service that integrates with Nautobot to fetch device information using a GraphQL query, process the data, and expose it as a JSON endpoint for Prometheus to scrape as an HTTP SD endpoint.
 
+Any file beginning with `job_` and ending with the file extension `.gql` in the `graphql_queries` folder will be run, therefore allowing you to do things like this:
+- `job_siteA_leaf.gql`
+- `job_siteB_leaf.gql`
+- `job_siteC_leaf.gql`
 ## Features
 
 - Fetches device data from Nautobot using a GraphQL API.

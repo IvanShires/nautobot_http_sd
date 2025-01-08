@@ -19,15 +19,16 @@ This project is a Go-based HTTP service that integrates with Nautobot to fetch d
 ## Install / Usage
 
 Clone the repository:
-   ```
-    git clone https://github.com/IvanShires/nautobot_http_sd.git
-    cd nautobot_http_sd
-    docker build -t nautobot_http_sd .
-    touch .env
-    echo "NAUTOBOT_API_TOKEN=your_token_here" >> .env
-    echo "NAUTOBOT_URL=http://nautobot.domain.tld" >> .env
-    docker run -d --name=nautobot_http_sd --env-file .env -p 6645:6645 nautobot_http_sd
-    ```
+   
+```
+git clone https://github.com/IvanShires/nautobot_http_sd.git
+cd nautobot_http_sd
+docker build -t nautobot_http_sd .
+touch .env
+echo "NAUTOBOT_API_TOKEN=your_token_here" >> .env
+echo "NAUTOBOT_URL=http://nautobot.domain.tld" >> .env
+docker run -d --name=nautobot_http_sd --env-file .env -p 6645:6645 nautobot_http_sd
+```
     
 I use this with Prometheus, so here is my `prometheus.yml` configuration, for Blackbox Exporter:
 

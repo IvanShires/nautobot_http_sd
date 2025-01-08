@@ -8,7 +8,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
+	"strings"
 )
 
 // Structs for decoding the JSON response
@@ -47,8 +49,8 @@ func main() {
 	}
 
 	// Read all GraphQL query files from the directory
-	queryDir := "graphql_queries/"
-	entries, err := os.ReadDir(queryDir)
+	queryDir := "graphql_queries/job_*"
+	entries, err := filepath.Glob(queryDir)
 	if err != nil {
 		log.Fatalf("Error reading directory %s: %v", queryDir, err)
 	}
@@ -57,25 +59,27 @@ func main() {
 	var output []map[string]interface{}
 	cidrRegex := regexp.MustCompile(`/[0-9]+.*`) // Regex to remove CIDR notation
 	gqlFileRegex := regexp.MustCompile(`\.gql$`) // Regex to strip ".gql" extension
-
 	for _, entry := range entries {
-		queryFile := queryDir + entry.Name()
-
-		// Skip non-regular files
-		if entry.IsDir() || !gqlFileRegex.MatchString(entry.Name()) {
+		if strings.ToLower(filepath.Ext(entry)) != ".gql" {
+			log.Printf("Skipping non-.gql file: %s", entry)
 			continue
 		}
 
 		// Read the GraphQL query from the file
-		query, err := os.ReadFile(queryFile)
+		query, err := os.ReadFile(entry)
 		if err != nil {
-			log.Printf("Error reading file %s: %v", queryFile, err)
+			log.Printf("Error reading file %s: %v", entry, err)
 			continue
 		}
 
+		processedName := gqlFileRegex.ReplaceAllString(entry, "")
+		parts := strings.SplitAfter(processedName, "/")
+		// Use the last part of the split if applicable
+		jobName := parts[len(parts)-1] // Get the last element
+
 		// Send GraphQL query and process the response
-		if err := processQuery(url, token, string(query), gqlFileRegex.ReplaceAllString(entry.Name(), ""), &output, cidrRegex); err != nil {
-			log.Printf("Error processing query from file %s: %v", queryFile, err)
+		if err := processQuery(url, token, string(query), jobName, &output, cidrRegex); err != nil {
+			log.Printf("Error processing query from file %s: %v", entry, err)
 		}
 	}
 
